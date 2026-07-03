@@ -20,6 +20,9 @@ import os
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,9 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 mcp = FastMCP("perfecthub_mcp")
 
-API_BASE_URL = os.environ.get(
-    "PERFECTHUB_BASE_URL", "https://perfecthub.com.br/api/v2"
-).rstrip("/")
+API_BASE_URL = os.environ.get("PERFECTHUB_BASE_URL", "").rstrip("/")
 API_TOKEN = os.environ.get("PERFECTHUB_API_TOKEN", "").strip()
 
 PHONE_PATTERN = r"^[0-9+\-\s()]{10,20}$"
