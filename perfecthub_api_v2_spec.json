@@ -1,0 +1,561 @@
+{
+	"openapi": "3.0.0",
+	"info": {
+		"title": "API v2 Documentation",
+		"description": "Complete API v2 documentation.\n\n## Authentication\n\nAll requests require an API token. Include it in the `Authorization` header:\n\n```\nAuthorization: Bearer YOUR_API_TOKEN\n```\n\nAlternatively, you can use the `X-API-Key` header:\n\n```\nX-API-Key: YOUR_API_TOKEN\n```\n\n## Base URL\n\n```\nhttps://yourdomain.com/api/v2\n```\n\n## Rate Limiting\n\nAPI requests are rate-limited per token. Check response headers:\n- `X-RateLimit-Limit`: Total requests allowed\n- `X-RateLimit-Remaining`: Remaining requests\n- `X-RateLimit-Reset`: Unix timestamp when limit resets\n\n## Response Format\n\nAll responses follow a consistent JSON structure:\n\n**Success Response:**\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"meta\": {\n    \"request_id\": \"uuid\",\n    \"timestamp\": \"2024-02-08T14:30:25Z\"\n  }\n}\n```\n\n**Error Response:**\n```json\n{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"ERROR_CODE\",\n    \"message\": \"Error description\",\n    \"details\": { ... }\n  },\n  \"meta\": {\n    \"request_id\": \"uuid\",\n    \"timestamp\": \"2024-02-08T14:30:25Z\"\n  }\n}\n```",
+		"version": "1.0.0"
+	},
+	"servers": [
+		{
+			"url": "{protocol}://{domain}/api/v2",
+			"description": "Custom Server (Editable)",
+			"variables": {
+				"protocol": {
+					"default": "https",
+					"enum": [
+						"http",
+						"https"
+					],
+					"description": "HTTP protocol"
+				},
+				"domain": {
+					"default": "yourdomain.com",
+					"description": "Your domain (e.g., yourdomain.com or api.yourdomain.com)"
+				}
+			}
+		},
+		{
+			"url": "http://127.0.0.1:8000/api/v2",
+			"description": "Local Development (Default)"
+		}
+	],
+	"components": {
+		"securitySchemes": {
+			"bearerAuth": {
+				"type": "http",
+				"scheme": "bearer"
+			}
+		}
+	},
+	"security": [
+		{
+			"bearerAuth": []
+		}
+	],
+	"tags": [
+		{
+			"name": "Contacts",
+			"description": "Contact management endpoints for creating, reading, updating, and deleting contacts."
+		},
+		{
+			"name": "Messages",
+			"description": "Send and manage WhatsApp messages through multiple channels.\n\n**Sending Endpoints (Scope: `messages:send`):**\n- `POST /messages/text` — Send plain text messages (within 24-hour window)\n- `POST /messages/template` — Send pre-approved template messages (any time)\n- `POST /messages/media` — Send media files (image, video, document, audio)\n- `POST /messages/interactive` — Send interactive messages (buttons or lists)\n\n**Reading Endpoints (Scope: `messages:read`):**\n- `GET /messages` — List message history (filterable, sortable, searchable)\n- `GET /messages/{id}` — Get detailed message information\n\n**Common Behavior:**\n- All send endpoints auto-create contacts if phone number is new\n- Merge fields (e.g., `@{contact_first_name}`) are supported in text and template messages\n- WhatsApp 24-hour customer service window applies to text and media messages\n- Template messages can be sent at any time regardless of the window"
+		},
+		{
+			"name": "Authentication (OTP/Verification)",
+			"description": "Complete OTP-as-a-Service for WhatsApp authentication.\n\nSend, verify, resend, and check status of OTP codes delivered via WhatsApp AUTHENTICATION category templates. Includes auto-contact creation, rate limiting, attempt tracking, and expiry management.\n\n**Authentication Flow:**\n1. `GET /auth/templates` — Discover available authentication templates\n2. `POST /auth/send-otp` — Send OTP code via WhatsApp template\n3. `POST /auth/status` — (Optional) Check OTP status / expiry timer\n4. `POST /auth/verify` — Verify the OTP code\n5. `POST /auth/resend` — Resend if needed (generates new code)\n\n**Required Scopes:** `messages:send` (send, verify, resend, status), `templates:read` (list templates)\n\n**Rate Limits:**\n- Verify: 10 attempts per minute per phone\n- Resend: 3 attempts per 5 minutes per phone\n- OTP: 5 verification attempts per code (configurable)"
+		},
+		{
+			"name": "Groups",
+			"description": "Manage contact groups for organizing and targeting contacts."
+		},
+		{
+			"name": "Templates",
+			"description": "Manage WhatsApp message templates synced from your WhatsApp Business Account.\n\nTemplates are created and managed through Meta Business Manager and synced to your account via the API. This section provides read-only access to templates and a sync endpoint to refresh the local template database.\n\n**Available Endpoints:**\n- `GET /templates` — List all templates (filterable, sortable, searchable)\n- `GET /templates/{id}` — Get a specific template by WhatsApp template ID\n- `POST /templates/sync` — Sync templates from WhatsApp Business API\n\n**Required Scopes:** `templates:read`, `templates:sync`"
+		},
+		{
+			"name": "Sources",
+			"description": "Manage contact sources."
+		},
+		{
+			"name": "Statuses",
+			"description": "Manage contact statuses."
+		},
+		{
+			"name": "Account",
+			"description": "Account and usage information."
+		}
+	],
+	"paths": {
+		"/contacts": {
+			"get": {
+				"tags": ["Contacts"],
+				"summary": "List Contacts",
+				"description": "Retrieve a paginated list of contacts with advanced filtering, sorting, searching, field selection, and relationship inclusion.\n\n## Authentication\n\n**Required Scope:** `contacts:read`\n\n## Query Parameters\n\n### Pagination\n\n| Parameter | Type | Default | Description |\n|-----------|------|---------|-------------|\n| `page` | integer | 1 | Page number |\n| `per_page` | integer | 15 | Items per page (max: 100) |\n\n### Sorting\n\n| Parameter | Type | Description |\n|-----------|------|-------------|\n| `sort` | string | Comma-separated sort fields. Prefix with `-` for descending order |\n\n**Allowed sort fields:** `id`, `firstname`, `lastname`, `created_at`, `updated_at`\n\n### Searching\n\n| Parameter | Type | Description |\n|-----------|------|-------------|\n| `search` | string | Search across firstname, lastname, email, phone, company (partial match) |\n| `q` | string | Alias for `search` |\n\n### Filtering\n\nUse `filter[field]` for exact match or `filter[field][operator]` for complex filters.\n\n**Allowed filter fields:** `filter[type]`, `filter[status_id]`, `filter[source_id]`, `filter[assigned_id]`, `filter[created_at]`, `filter[group_id]`\n\n**Complex filter operators:** `gte` (>=), `lte` (<=), `gt` (>), `lt` (<), `ne` (!=), `like`, `in`, `not_in`, `between`, `null`\n\n### Relationships\n\n`include` — comma-separated. Allowed: `groups`, `source`, `status`\n\n### Field Selection\n\n`fields` — comma-separated. Critical fields always included: id, tenant_id, created_at, updated_at, type, status_id, source_id, email, phone, description, city, state, zip, address, country_id, assigned_id, group_id, is_opted_out, firstname, lastname, company\n\n## Response Fields\n\nid, firstname, lastname, company, type (lead/customer/guest), email, phone, status_id, source_id, description, city, state, zip, address, country_id, assigned_id, group_id (array), is_opted_out, created_at, updated_at, groups (when included), source (when included), status (when included)\n\n## Pagination Meta\n\nmeta.pagination: total, count, per_page, current_page, total_pages, has_more",
+				"parameters": [
+					{"name": "page", "in": "query", "schema": {"type": "integer"}, "description": "Page number (default: 1)", "example": "1"},
+					{"name": "per_page", "in": "query", "schema": {"type": "integer"}, "description": "Items per page (default: 15, max: 100)", "example": "20"},
+					{"name": "sort", "in": "query", "schema": {"type": "string"}, "description": "Sort by field. Allowed: id, firstname, lastname, created_at, updated_at. Prefix with - for descending. Comma-separated for multiple sorts", "example": "-created_at"},
+					{"name": "search", "in": "query", "schema": {"type": "string"}, "description": "Search across firstname, lastname, email, phone, company (partial match)", "example": "john"},
+					{"name": "q", "in": "query", "schema": {"type": "string"}, "description": "Alias for search parameter", "example": "john"},
+					{"name": "filter[type]", "in": "query", "schema": {"type": "string"}, "description": "Filter by contact type. Allowed values: lead, customer, guest", "example": "lead"},
+					{"name": "filter[status_id]", "in": "query", "schema": {"type": "integer"}, "description": "Filter by status ID (exact match)", "example": "2"},
+					{"name": "filter[source_id]", "in": "query", "schema": {"type": "integer"}, "description": "Filter by source ID (exact match)", "example": "1"},
+					{"name": "filter[assigned_id]", "in": "query", "schema": {"type": "integer"}, "description": "Filter by assigned user ID (exact match)", "example": "5"},
+					{"name": "filter[group_id]", "in": "query", "schema": {"type": "integer"}, "description": "Filter by group ID (JSON contains match on group_id array)", "example": "3"},
+					{"name": "filter[created_at][gte]", "in": "query", "schema": {"type": "string"}, "description": "Filter created_at >= value. Operators: gte, lte, gt, lt, ne, like, in, not_in, between, null", "example": "2025-01-01"},
+					{"name": "filter[created_at][lte]", "in": "query", "schema": {"type": "string"}, "description": "Filter created_at <= value", "example": "2025-12-31"},
+					{"name": "filter[status_id][in]", "in": "query", "schema": {"type": "string"}, "description": "Filter status_id in multiple values (comma-separated)", "example": "1,2,3"},
+					{"name": "include", "in": "query", "schema": {"type": "string"}, "description": "Include relationships. Allowed: groups, source, status (comma-separated)", "example": "groups,source,status"},
+					{"name": "fields", "in": "query", "schema": {"type": "string"}, "description": "Select specific fields to return (comma-separated)", "example": "id,firstname,phone,email"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"post": {
+				"tags": ["Contacts"],
+				"summary": "Create Contact",
+				"description": "Create a new contact. **Required Scope:** `contacts:write`\n\n## Request Body\n\n| Field | Type | Required | Validation |\n|---|---|---|---|\n| firstname | string | Yes | max:255 |\n| lastname | string | Yes | max:255 |\n| phone | string | Yes | max:20, unique per tenant |\n| type | string | Yes | lead, customer, guest |\n| source_id | integer | Yes | must exist in tenant sources |\n| status_id | integer | Yes | must exist in tenant statuses |\n| email | string | No | email, max:191, unique per tenant |\n| company | string | No | max:255 |\n| description | string | No | — |\n| city, state | string | No | max:255 |\n| zip | string | No | max:20 |\n| address | string | No | max:500 |\n| country_id | integer | No | — |\n| assigned_id | integer | No | — |\n| groups | array | No | array of integers |\n\n## Errors\n422 VALIDATION_ERROR, 403 FEATURE_LIMIT_EXCEEDED (contact limit reached), 500 INTERNAL_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"firstname": "New", "lastname": "Test", "type": "lead", "email": "test12@gmail.com", "phone": "+919587422363", "source_id": 115, "status_id": 287, "description": "Test one contact", "country_id": 101, "assigned_id": 15, "groups": [12], "zip": "360001", "city": "Rajkot"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/contacts/{id}": {
+			"get": {
+				"tags": ["Contacts"],
+				"summary": "Get Contact",
+				"description": "Retrieve a single contact by ID. **Required Scope:** `contacts:read`. Query param `include` (groups, source, status). Errors: 404 NOT_FOUND, 500 INTERNAL_ERROR",
+				"parameters": [
+					{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The contact ID"},
+					{"name": "include", "in": "query", "schema": {"type": "string"}, "description": "Include relationships. Allowed: groups, source, status (comma-separated)", "example": "groups,source,status"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"patch": {
+				"tags": ["Contacts"],
+				"summary": "Update Contact",
+				"description": "Partial update. **Required Scope:** `contacts:write`. All fields optional, same validation as create. `groups` if provided replaces existing groups entirely. Errors: 404 NOT_FOUND, 422 VALIDATION_ERROR, 500 INTERNAL_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"firstname": "Test Edited", "type": "customer", "phone": "+919587422369", "status_id": 288, "description": "Test one contact edited", "city": "Baroda"}}}}},
+				"parameters": [
+					{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The contact ID"},
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"delete": {
+				"tags": ["Contacts"],
+				"summary": "Delete Contact",
+				"description": "Permanently delete a contact by ID. **Required Scope:** `contacts:delete`. Errors: 404 NOT_FOUND, 500 INTERNAL_ERROR. NOT included in v1 MCP tool scope (irreversible).",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The contact ID"}]
+			}
+		},
+		"/contacts/batch": {
+			"post": {
+				"tags": ["Contacts"],
+				"summary": "Batch Create Contacts",
+				"description": "Create multiple contacts transactionally. **Required Scope:** `contacts:write`. Body: `contacts` (array, same fields as single create), `options.continue_on_error` (bool, default true), `options.skip_duplicates` (bool, default false, dedupes by phone). Response includes summary.total/created/skipped/failed plus created/skipped/errors arrays.",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"contacts": [{"firstname": "Test", "lastname": "Three", "type": "lead", "email": "testthree@gmail.com", "phone": "+919587422390", "source_id": 115, "status_id": 287, "description": "Test one contact", "country_id": 101, "group_id": [12], "zip": "360001", "city": "Rajkot"}, {"firstname": "Test", "lastname": "Four", "type": "customer", "email": "testfour@gmail.com", "phone": "+919587422355", "source_id": 115, "status_id": 287, "description": "Test one contact", "country_id": 101, "addedfrom": 1}], "options": {"continue_on_error": true, "skip_duplicates": false}}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"delete": {
+				"tags": ["Contacts"],
+				"summary": "Batch Delete Contacts",
+				"description": "Delete multiple contacts by ID transactionally. **Required Scope:** `contacts:delete`. Body: `ids` array. IDs not found/not belonging to tenant are counted as failed, not errored. NOT included in v1 MCP tool scope (irreversible bulk action).",
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/messages/text": {
+			"post": {
+				"tags": ["Messages"],
+				"summary": "Send Text Message",
+				"description": "Send plain text via WhatsApp Cloud API. Auto-creates contact if phone is new (requires default lead status/source/assignee configured). Subject to 24h customer service window. **Required Scope:** `messages:send`\n\n## Request Body\n| Field | Type | Required | Validation |\n|---|---|---|---|\n| phone | string | Yes | min:10, max:20, digits/+/-/spaces/() |\n| message | string | Yes | max:4096, supports merge fields |\n| contact_id | integer | No | valid integer |\n\n## Merge fields\n@{contact_first_name}, @{contact_last_name}, @{contact_email}, @{contact_phone}\n\n## Response fields\nmessage_id, contact_id, phone, message, status, sent_at, chat_id, chat_message_id\n\n## Errors (common to all send endpoints)\n401 UNAUTHORIZED, 403 INSUFFICIENT_SCOPE, 403 FEATURE_LIMIT_EXCEEDED, 403 CONTACT_OPTED_OUT, 404 NOT_FOUND, 422 VALIDATION_ERROR, 422 WHATSAPP_NOT_CONFIGURED, 429 RATE_LIMIT_EXCEEDED, 500 MESSAGE_SEND_FAILED, 500 INTERNAL_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"phone": "+919999999999", "message": "Hello @{contact_first_name}! This is a test message.", "contact_id": 1}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/messages/template": {
+			"post": {
+				"tags": ["Messages"],
+				"summary": "Send Template Message",
+				"description": "Send a pre-approved template, works anytime regardless of 24h window. Supports JSON or multipart form-data. **Required Scope:** `messages:send`\n\n## Required fields\nphone, template_name (must be APPROVED), language (max:10)\n\n## Optional\ncontact_id, header_image_url/file (5MB), header_video_url/file (16MB), header_document_url/file (100MB) + header_document_name, header_field_1, field_1..field_10 (body params, support merge fields), button_0..button_2, auto_generate_otp, otp_field_number (default 1, must be 6)\n\n## Response fields\nmessage_id, contact_id, phone, template_name, language, status, sent_at, chat_id, chat_message_id\n\n## Additional errors\n403 FEATURE_NOT_AVAILABLE, 404 NOT_FOUND (template), 422 VALIDATION_ERROR (missing template params)",
+				"requestBody": {"content": {}},
+				"parameters": [
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "multipart/form-data"},
+					{"name": "phone", "in": "query", "schema": {"type": "string"}, "example": "+919999999999"},
+					{"name": "template_name", "in": "query", "schema": {"type": "string"}, "example": "welcome_message"},
+					{"name": "language", "in": "query", "schema": {"type": "string"}, "example": "en"},
+					{"name": "contact_id", "in": "query", "schema": {"type": "integer"}, "example": "1"},
+					{"name": "field_1", "in": "query", "schema": {"type": "string"}, "example": "@{contact_first_name}"},
+					{"name": "field_2", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_3", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_4", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_5", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_6", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_7", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_8", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_9", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "field_10", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "header_field_1", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "header_image_url", "in": "query", "schema": {"type": "string"}, "example": "https://example.com/image.png"},
+					{"name": "header_video_url", "in": "query", "schema": {"type": "string"}, "example": "https://example.com/video.mp4"},
+					{"name": "header_document_url", "in": "query", "schema": {"type": "string"}, "example": "https://example.com/document.pdf"},
+					{"name": "header_document_name", "in": "query", "schema": {"type": "string"}, "example": "My Document"},
+					{"name": "button_0", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "button_1", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "button_2", "in": "query", "schema": {"type": "string"}, "example": ""},
+					{"name": "auto_generate_otp", "in": "query", "schema": {"type": "boolean"}, "example": "false"},
+					{"name": "otp_field_number", "in": "query", "schema": {"type": "integer"}, "example": "1"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/messages/media": {
+			"post": {
+				"tags": ["Messages"],
+				"summary": "Send Media Message",
+				"description": "Send image/video/document/audio via WhatsApp. multipart/form-data. **Required Scope:** `messages:send`\n\n## Fields\nphone (min:10,max:15), media_type (image/document/video/audio), media_url OR media_file (one required), caption (max:1024, not for audio), filename (max:255), contact_id, contact.firstname/lastname/email/country/assigned_id/groups (for auto-creation)\n\n## Size/extension limits\nimage: jpg/jpeg/png/webp, 5MB | document: pdf/doc/docx/xls/xlsx/ppt/pptx/txt/csv, 100MB | video: mp4/3gp, 16MB | audio: mp3/ogg/amr/aac/opus, 16MB (configurable per tenant)\n\n## Response fields\nmessage_id, contact_id, phone, media_type, media_url, caption, filename, status, sent_at, chat_id, chat_message_id\n\n## Additional errors\n422 INVALID_MEDIA_TYPE, 422 invalid extension/size exceeded",
+				"requestBody": {"content": {"multipart/form-data": {"schema": {"type": "object", "properties": {"media_file": {"type": "string", "format": "binary", "description": "Direct file upload (required if no media_url)"}}}}}},
+				"parameters": [
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "multipart/form-data"},
+					{"name": "phone", "in": "query", "schema": {"type": "string"}, "example": "+919999999999"},
+					{"name": "media_type", "in": "query", "schema": {"type": "string", "enum": ["image", "document", "video", "audio"]}, "example": "image"},
+					{"name": "media_url", "in": "query", "schema": {"type": "string"}, "example": "https://example.com/image.png"},
+					{"name": "caption", "in": "query", "schema": {"type": "string"}, "example": "Check this out!"},
+					{"name": "filename", "in": "query", "schema": {"type": "string"}, "example": "document.pdf"},
+					{"name": "contact_id", "in": "query", "schema": {"type": "integer"}, "example": "1"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/messages/interactive": {
+			"post": {
+				"tags": ["Messages"],
+				"summary": "Send Interactive Message",
+				"description": "Send button or list interactive messages. **Required Scope:** `messages:send`\n\n## Common fields\nphone, type (button|list), body_text (max:1024), header_text (max:60), footer_text (max:60), contact_id\n\n## Button type\nbuttons array (max 3), each {id, title (max:20)}\n\n## List type\nlist_button_text (max:20), sections array (max:10), each {title, rows: [{id, title (max:24), description (max:72)}]}\n\n## Response fields\nmessage_id, contact_id, phone, type, status, sent_at, chat_id, chat_message_id",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"phone": "+919999999999", "type": "button", "body_text": "Would you like to schedule a demo?", "header_text": "Product Demo", "footer_text": "Click a button below", "buttons": [{"id": "btn_yes", "title": "Yes, please!"}, {"id": "btn_no", "title": "Not now"}, {"id": "btn_later", "title": "Maybe later"}]}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/messages/cta": {
+			"post": {
+				"tags": ["Messages"],
+				"summary": "Send CTA Message",
+				"description": "Send a true CTA URL button (opens URL on tap, unlike reply buttons). **Required Scope:** `messages:send`\n\n## Fields\nphone (min:10,max:15), message (max:1024), button_text (max:25), button_url (max:2048), header_text (max:60), footer_text (max:60), contact_id\n\n## Response fields\nmessage_id, contact_id, phone, button_text, button_url, status, sent_at, chat_id, chat_message_id",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"phone": "+919999999999", "message": "Tap below to open our pricing page.", "button_text": "View Pricing", "button_url": "https://example.com/pricing", "header_text": "Special Offer", "footer_text": "Limited time only"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/messages": {
+			"get": {
+				"tags": ["Messages"],
+				"summary": "List Messages",
+				"description": "Paginated WhatsApp message history, ordered by most recent first. **Required Scope:** `messages:read`\n\n## Query params\npage, per_page (max 100), sort (created_at/updated_at, default -created_at), search/q (in message text), fields\n\n## Filters\nfilter[type] (text/template/image/video/document/audio/interactive), filter[status] (sent/delivered/read/failed), filter[interaction_id], filter[direction] (inbound/outbound). Operators: none (exact), ne, in, not_in\n\n## Response fields\nid, interaction_id, sender_id, type, message, status, message_id, sent_at, is_read",
+				"parameters": [
+					{"name": "page", "in": "query", "schema": {"type": "integer"}, "example": "1"},
+					{"name": "per_page", "in": "query", "schema": {"type": "integer"}, "example": "15"},
+					{"name": "sort", "in": "query", "schema": {"type": "string"}, "example": "-created_at"},
+					{"name": "search", "in": "query", "schema": {"type": "string"}, "example": "hello"},
+					{"name": "filter[type]", "in": "query", "schema": {"type": "string"}, "example": "text"},
+					{"name": "filter[status]", "in": "query", "schema": {"type": "string"}, "example": "sent"},
+					{"name": "filter[interaction_id]", "in": "query", "schema": {"type": "integer"}, "example": "9"},
+					{"name": "filter[direction]", "in": "query", "schema": {"type": "string"}, "example": "outbound"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/messages/{id}": {
+			"get": {
+				"tags": ["Messages"],
+				"summary": "Get Message",
+				"description": "Detailed info for one message by internal ID. Includes extra fields vs list: status_message, ref_message_id, url, staff_id. **Required Scope:** `messages:read`. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "Internal message record ID"}]
+			}
+		},
+		"/auth/send-otp": {
+			"post": {
+				"tags": ["Authentication (OTP/Verification)"],
+				"summary": "Send OTP/Verification Code",
+				"description": "Send WhatsApp AUTHENTICATION template OTP. Handles contact auto-creation, stores OTP for later verify. **Required Scope:** `messages:send`\n\n## Request Body\nphone (Yes, min:10,max:20), template_name (Yes, must be APPROVED AUTHENTICATION template), code (No, digits:6, auto-generated server-side if omitted), language (No, default en), expiry_minutes (No, min:1,max:60, default 10), contact_id (No), purpose (No, default 'authentication'), additional_params (No, array)\n\n## Response fields\nmessage_id, contact_id, phone, template_name, language, code_sent (true), code_auto_generated, code (only if auto_generated=true), expiry_minutes, expires_at, status, sent_at\n\n## Errors\n401 UNAUTHORIZED, 403 INSUFFICIENT_SCOPE, 403 FEATURE_LIMIT_EXCEEDED, 403 CONTACT_OPTED_OUT, 403 FEATURE_NOT_AVAILABLE, 404 RESOURCE_NOT_FOUND (template), 404 NOT_FOUND (contact), 422 VALIDATION_ERROR, 422 WHATSAPP_NOT_CONFIGURED, 429 RATE_LIMIT_EXCEEDED, 500 MESSAGE_SEND_FAILED, 500 INTERNAL_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"phone": "+919999999999", "template_name": "otp_verification", "language": "en", "expiry_minutes": 10, "purpose": "authentication"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/auth/templates": {
+			"get": {
+				"tags": ["Authentication (OTP/Verification)"],
+				"summary": "List Authentication Templates",
+				"description": "Approved AUTHENTICATION-category templates only. **Required Scope:** `templates:read`\n\n## Query params\npage, per_page, sort (template_name/created_at/language), search/q, filter[language], filter[template_name]\n\n## Response fields\nid, template_name, language, body_text, body_params_count, header_format, header_text, footer_text, status (always APPROVED), created_at",
+				"parameters": [
+					{"name": "page", "in": "query", "schema": {"type": "integer"}, "example": "1"},
+					{"name": "per_page", "in": "query", "schema": {"type": "integer"}, "example": "15"},
+					{"name": "sort", "in": "query", "schema": {"type": "string"}, "example": "template_name"},
+					{"name": "search", "in": "query", "schema": {"type": "string"}, "example": "otp"},
+					{"name": "filter[language]", "in": "query", "schema": {"type": "string"}, "example": "en"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/auth/verify": {
+			"post": {
+				"tags": ["Authentication (OTP/Verification)"],
+				"summary": "Verify OTP",
+				"description": "Verify code sent via /auth/send-otp. **Required Scope:** `messages:send`\n\n## Request Body\nphone (Yes), code (Yes), purpose (No, default 'authentication', must match)\n\n## Rate limit\n10 attempts/min per phone per tenant, clears on success\n\n## Flow\nclean phone -> rate check -> lookup active OTP -> max attempts check (default 5) -> expiry check -> compare code -> on success mark verified + clear limiter\n\n## Success response\nphone, purpose, verified_at\n\n## Error scenarios\nOTP_NOT_FOUND, MAX_ATTEMPTS_EXCEEDED, OTP_EXPIRED, INVALID_CODE (returns attempts_remaining)",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"phone": "+919999999999", "code": "123456", "purpose": "authentication"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/auth/resend": {
+			"post": {
+				"tags": ["Authentication (OTP/Verification)"],
+				"summary": "Resend OTP",
+				"description": "Generates new 6-digit code, deletes previous OTP, delegates to send-otp logic. **Required Scope:** `messages:send`\n\n## Request Body\nphone (Yes), template_name (Yes), language (No, default en), expiry_minutes (No, default 10), purpose (No, default authentication)\n\n## Rate limit\n3 resend attempts / 5 min per phone per tenant (stricter than verify)\n\nResponse format same as /auth/send-otp",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"phone": "+919999999999", "template_name": "otp_verification", "language": "en", "expiry_minutes": 10, "purpose": "authentication"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/auth/status": {
+			"post": {
+				"tags": ["Authentication (OTP/Verification)"],
+				"summary": "Check OTP Status",
+				"description": "Non-destructive check of active OTP — doesn't consume attempts. **Required Scope:** `messages:send`\n\n## Request Body\nphone (Yes), purpose (No, default authentication)\n\n## Response (active OTP)\nhas_active_otp, expires_at, expires_in_seconds, is_expired, verification_attempts, max_attempts, attempts_remaining, created_at\n\n## Response (no active OTP)\nhas_active_otp: false, message: 'No active OTP found'",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"phone": "+919999999999", "purpose": "authentication"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/groups": {
+			"get": {
+				"tags": ["Groups"],
+				"summary": "List Groups",
+				"description": "Paginated group list with filter/sort/search. **Required Scope:** `groups:read`. Sort fields: name, created_at, updated_at. Filter: filter[created_at] with operators gte/lte/gt/lt/ne/like/in/not_in/between/null. Response includes meta.pagination.",
+				"parameters": [
+					{"name": "page", "in": "query", "schema": {"type": "integer"}, "example": "1"},
+					{"name": "per_page", "in": "query", "schema": {"type": "integer"}, "example": "15"},
+					{"name": "sort", "in": "query", "schema": {"type": "string"}, "example": "-created_at"},
+					{"name": "search", "in": "query", "schema": {"type": "string"}, "example": "VIP"},
+					{"name": "filter[created_at][gte]", "in": "query", "schema": {"type": "string"}, "example": "2025-01-01"},
+					{"name": "filter[created_at][lte]", "in": "query", "schema": {"type": "string"}, "example": "2025-12-31"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"post": {
+				"tags": ["Groups"],
+				"summary": "Create Group",
+				"description": "**Required Scope:** `groups:write`. Body: name (Yes, max:255, unique per tenant). Response: id, name, created_at, updated_at. Errors: 422 VALIDATION_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"name": "VIP Customers"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/groups/{id}": {
+			"get": {
+				"tags": ["Groups"],
+				"summary": "Get Group",
+				"description": "**Required Scope:** `groups:read`. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The group ID"}]
+			},
+			"patch": {
+				"tags": ["Groups"],
+				"summary": "Update Group",
+				"description": "**Required Scope:** `groups:write`. Body: name (Yes, max:255, unique excl current). Errors: 404 NOT_FOUND, 422 VALIDATION_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"name": "Premium VIP Customers"}}}}},
+				"parameters": [
+					{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The group ID"},
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"delete": {
+				"tags": ["Groups"],
+				"summary": "Delete Group",
+				"description": "**Required Scope:** `groups:delete`. Errors: 404 NOT_FOUND. NOT included in v1 MCP tool scope.",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The group ID"}]
+			}
+		},
+		"/groups/{id}/contacts": {
+			"post": {
+				"tags": ["Groups"],
+				"summary": "Add Contacts to Group",
+				"description": "**Required Scope:** `groups:write`. Body: contact_ids (Yes, min:1, array of integers, each must exist). Already-in-group contacts silently skipped. All contacts must belong to same tenant. Response: group_id, contacts_added. Errors: 404 NOT_FOUND, 422 VALIDATION_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"contact_ids": [123, 124, 125]}}}}},
+				"parameters": [
+					{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The group ID"},
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"delete": {
+				"tags": ["Groups"],
+				"summary": "Remove Contacts from Group",
+				"description": "**Required Scope:** `groups:write`. Body: contact_ids (Yes, min:1). Not-in-group contacts silently skipped. Response: group_id, contacts_removed. NOT included in v1 MCP tool scope (destructive-adjacent).",
+				"parameters": [
+					{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The group ID"},
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/templates": {
+			"get": {
+				"tags": ["Templates"],
+				"summary": "List Templates",
+				"description": "**Required Scope:** `templates:read`\n\n## Query params\npage, per_page, sort (template_name/created_at/updated_at), search/q (template_name, category), fields\n\n## Filters\nstatus (APPROVED/PENDING/REJECTED), category (MARKETING/UTILITY/AUTHENTICATION), language. Operators: none, like, ne, in, not_in, null\n\n## Response fields\nid, template_id, template_name, name (alias), language, category, status, header_data_format, header_data_text, header_params_count, header_file_url, header_variable_value, body_data, body_params_count, body_variable_value, footer_data, footer_params_count, buttons_data, message_send_ttl_seconds, add_security_recommendation, code_expiration_minutes, otp_button_config, components, created_at, updated_at",
+				"parameters": [
+					{"name": "page", "in": "query", "schema": {"type": "integer"}, "example": "1"},
+					{"name": "per_page", "in": "query", "schema": {"type": "integer"}, "example": "15"},
+					{"name": "sort", "in": "query", "schema": {"type": "string"}, "example": "-created_at"},
+					{"name": "search", "in": "query", "schema": {"type": "string"}, "example": "welcome"},
+					{"name": "filter[status]", "in": "query", "schema": {"type": "string"}, "example": "APPROVED"},
+					{"name": "filter[category]", "in": "query", "schema": {"type": "string"}, "example": "MARKETING"},
+					{"name": "filter[language]", "in": "query", "schema": {"type": "string"}, "example": "en"},
+					{"name": "fields", "in": "query", "schema": {"type": "string"}, "example": "id,template_name,status,category"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/templates/{id}": {
+			"get": {
+				"tags": ["Templates"],
+				"summary": "Get Template",
+				"description": "**Required Scope:** `templates:read`. Path param id = WhatsApp template_id field (not internal id). Same response fields as list. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The WhatsApp template ID (template_id field)"}]
+			}
+		},
+		"/templates/sync": {
+			"post": {
+				"tags": ["Templates"],
+				"summary": "Sync Templates from WhatsApp",
+				"description": "**Required Scope:** `templates:sync`. Fetches all templates from connected WhatsApp Business Account, updates local DB. Requires wm_business_account_id and wm_access_token configured in account WhatsApp settings, else 422 WHATSAPP_NOT_CONFIGURED. Response: synced_count, templates (array). NOT included in v1 MCP tool scope (external side effect).",
+				"requestBody": {"content": {}},
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/sources": {
+			"get": {
+				"tags": ["Sources"],
+				"summary": "List Sources",
+				"description": "**Required Scope:** `sources:read`. Same pagination/sort/search/filter pattern as Groups. Response: id, name, created_at, updated_at + meta.pagination.",
+				"parameters": [
+					{"name": "page", "in": "query", "schema": {"type": "integer"}, "example": "1"},
+					{"name": "per_page", "in": "query", "schema": {"type": "integer"}, "example": "15"},
+					{"name": "sort", "in": "query", "schema": {"type": "string"}, "example": "-created_at"},
+					{"name": "search", "in": "query", "schema": {"type": "string"}, "example": "Website"},
+					{"name": "filter[created_at][gte]", "in": "query", "schema": {"type": "string"}, "example": "2025-01-01"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"post": {
+				"tags": ["Sources"],
+				"summary": "Create Source",
+				"description": "**Required Scope:** `sources:write`. Body: name (Yes, max:255, unique per tenant). Errors: 422 VALIDATION_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"name": "Website Form"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/sources/{id}": {
+			"get": {
+				"tags": ["Sources"],
+				"summary": "Get Source",
+				"description": "**Required Scope:** `sources:read`. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The source ID"}]
+			},
+			"patch": {
+				"tags": ["Sources"],
+				"summary": "Update Source",
+				"description": "**Required Scope:** `sources:write`. Body: name (Yes, unique excl current). Errors: 404 NOT_FOUND, 422 VALIDATION_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"name": "Updated Source Name"}}}}},
+				"parameters": [
+					{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The source ID"},
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"delete": {
+				"tags": ["Sources"],
+				"summary": "Delete Source",
+				"description": "**Required Scope:** `sources:write`. Blocked if source in use by contacts (409 RESOURCE_CONFLICT with count). Errors: 404 NOT_FOUND, 409 RESOURCE_CONFLICT",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The source ID"}]
+			}
+		},
+		"/statuses": {
+			"get": {
+				"tags": ["Statuses"],
+				"summary": "List Statuses",
+				"description": "**Required Scope:** `statuses:read`. Same pagination/sort/search/filter pattern. Response fields: id, name, color (hex, nullable), created_at, updated_at + meta.pagination.",
+				"parameters": [
+					{"name": "page", "in": "query", "schema": {"type": "integer"}, "example": "1"},
+					{"name": "per_page", "in": "query", "schema": {"type": "integer"}, "example": "15"},
+					{"name": "sort", "in": "query", "schema": {"type": "string"}, "example": "-created_at"},
+					{"name": "search", "in": "query", "schema": {"type": "string"}, "example": "Hot"},
+					{"name": "filter[created_at][gte]", "in": "query", "schema": {"type": "string"}, "example": "2025-01-01"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"post": {
+				"tags": ["Statuses"],
+				"summary": "Create Status",
+				"description": "**Required Scope:** `statuses:write`. Body: name (Yes, max:255, unique per tenant), color (No, max:7, hex #RRGGBB). Errors: 422 VALIDATION_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"name": "Hot Lead", "color": "#FF5733"}}}}},
+				"parameters": [{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/statuses/{id}": {
+			"get": {
+				"tags": ["Statuses"],
+				"summary": "Get Status",
+				"description": "**Required Scope:** `statuses:read`. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The status ID"}]
+			},
+			"patch": {
+				"tags": ["Statuses"],
+				"summary": "Update Status",
+				"description": "**Required Scope:** `statuses:write`. Body: name (Yes, unique excl current), color (No, hex). Errors: 404 NOT_FOUND, 422 VALIDATION_ERROR",
+				"requestBody": {"content": {"application/json": {"schema": {"type": "object", "example": {"name": "Updated Status Name", "color": "#00FF00"}}}}},
+				"parameters": [
+					{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The status ID"},
+					{"name": "Content-Type", "in": "header", "schema": {"type": "string"}, "example": "application/json"}
+				],
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			},
+			"delete": {
+				"tags": ["Statuses"],
+				"summary": "Delete Status",
+				"description": "**Required Scope:** `statuses:write`. Blocked if status in use by contacts (409 RESOURCE_CONFLICT with count). Errors: 404 NOT_FOUND, 409 RESOURCE_CONFLICT",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}},
+				"parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}, "description": "The status ID"}]
+			}
+		},
+		"/account": {
+			"get": {
+				"tags": ["Account"],
+				"summary": "Get Account Info",
+				"description": "**Required Scope:** `account:read`. Response: id, name, subdomain, status (default active), created_at, subscription {plan_name (default Free), plan_id, status, expires_at}. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/account/usage": {
+			"get": {
+				"tags": ["Account"],
+				"summary": "Get Usage Statistics",
+				"description": "**Required Scope:** `account:read`. Per-feature usage for contacts, conversations, campaigns, staff. Each feature: current, limit (nullable, -1=unlimited), remaining, percentage_used (0-100, 2 decimals, 0 for unlimited), is_unlimited. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		},
+		"/account/limits": {
+			"get": {
+				"tags": ["Account"],
+				"summary": "Get Plan Limits",
+				"description": "**Required Scope:** `account:read`. data.limits: {contacts, conversations, campaigns, staff, api_calls_per_minute (from token rate_limit_per_minute, default 60)} each with limit, feature_name, is_unlimited. data.features: boolean flags {whatsapp_templates, bulk_messaging, chatbot, advanced_analytics, api_access, custom_branding}. Errors: 404 NOT_FOUND",
+				"responses": {"200": {"description": "Successful response", "content": {"application/json": {}}}}
+			}
+		}
+	}
+}
