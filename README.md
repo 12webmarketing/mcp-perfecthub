@@ -63,7 +63,7 @@ Bootstrap commands:
 Runs: ${INSTALL_DIR}/.venv/bin/python ${INSTALL_DIR}/server.py
 ENVIRONMENT:
   PERFECTHUB_API_TOKEN=<token do tenant deste perfil>
-  PERFECTHUB_BASE_URL=https://perfecthub.com.br/api/v2
+  PERFECTHUB_BASE_URL=https://app.perfecthub.com.br/api/v2
 ```
 
 O servidor é stateless quanto a tenant: só lê `PERFECTHUB_API_TOKEN` na
