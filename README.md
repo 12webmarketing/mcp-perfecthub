@@ -1,7 +1,7 @@
 # perfecthub-mcp
 
 Servidor MCP (Model Context Protocol) que expõe a API v2 do PerfectHub
-(WhatsApp Business) como *tools* para o Hermes Agent — envio de mensagens,
+(WhatsApp Business) como _tools_ para o Hermes Agent — envio de mensagens,
 gestão de contatos/grupos, templates e OTP via linguagem natural.
 
 Transporte: `stdio`. Sem porta exposta, sem domínio próprio — o Hermes
@@ -11,15 +11,15 @@ sobe o processo localmente, conversa via stdin/stdout, e encerra depois.
 
 25 tools, cobrindo leitura + escrita não-destrutiva:
 
-| Categoria | Tools |
-|---|---|
-| Mensagens | `send_text_message`, `send_template_message`, `send_media_message`, `send_interactive_message`, `send_cta_message`, `list_messages`, `get_message` |
-| Contatos | `list_contacts`, `create_contact`, `get_contact`, `update_contact` |
-| Grupos | `list_groups`, `create_group`, `add_contacts_to_group` |
-| Templates | `list_templates`, `get_template` |
-| Autenticação/OTP | `list_auth_templates`, `send_otp`, `verify_otp`, `resend_otp`, `check_otp_status` |
-| Origens/Status | `list_sources`, `list_statuses` (leitura, necessário para `create_contact`) |
-| Conta | `get_account_info`, `get_usage_stats`, `get_plan_limits` |
+| Categoria        | Tools                                                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mensagens        | `send_text_message`, `send_template_message`, `send_media_message`, `send_interactive_message`, `send_cta_message`, `list_messages`, `get_message` |
+| Contatos         | `list_contacts`, `create_contact`, `get_contact`, `update_contact`                                                                                 |
+| Grupos           | `list_groups`, `create_group`, `add_contacts_to_group`                                                                                             |
+| Templates        | `list_templates`, `get_template`                                                                                                                   |
+| Autenticação/OTP | `list_auth_templates`, `send_otp`, `verify_otp`, `resend_otp`, `check_otp_status`                                                                  |
+| Origens/Status   | `list_sources`, `list_statuses` (leitura, necessário para `create_contact`)                                                                        |
+| Conta            | `get_account_info`, `get_usage_stats`, `get_plan_limits`                                                                                           |
 
 **Fora do escopo (deliberado):** delete de contatos/grupos/sources/statuses,
 batch delete, remoção de contatos de grupo, e `/templates/sync` — todos
@@ -49,7 +49,7 @@ python -m py_compile server.py
 
 ## Configuração no Hermes (uma vez por perfil)
 
-Cada perfil (12WEB Marketing, PerfectIA, ItPet, Pessoal) tem seu próprio
+Cada perfil tem seu próprio
 tenant/token no PerfectHub. Instale este MCP **uma vez por perfil**, com
 o token daquele tenant no campo Environment:
 
@@ -73,10 +73,10 @@ inteiramente pela variável de ambiente configurada em cada instalação.
 
 ## Variáveis de ambiente
 
-| Variável | Obrigatória | Padrão | Descrição |
-|---|---|---|---|
-| `PERFECTHUB_API_TOKEN` | Sim | — | Bearer token do tenant. Nunca commitar. |
-| `PERFECTHUB_BASE_URL` | Não | `https://perfecthub.com.br/api/v2` | Base URL da API v2. |
+| Variável               | Obrigatória | Padrão | Descrição                               |
+| ---------------------- | ----------- | ------ | --------------------------------------- |
+| `PERFECTHUB_API_TOKEN` | Sim         | —      | Bearer token do tenant. Nunca commitar. |
+| `PERFECTHUB_BASE_URL`  | Sim         | —      | Base URL da API v2.                     |
 
 ## Tratamento de erros
 
@@ -85,7 +85,9 @@ A API PerfectHub responde sempre no formato:
 ```json
 { "success": true, "data": {...}, "meta": {...} }
 ```
+
 ou
+
 ```json
 { "success": false, "error": { "code": "...", "message": "...", "details": {...} }, "meta": {...} }
 ```
